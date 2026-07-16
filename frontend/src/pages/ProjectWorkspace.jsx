@@ -35,17 +35,50 @@ export default function ProjectWorkspace() {
 
   useEffect(() => {
     fetchProject()
-    fetchReports()
-    fetchUploadedDocuments()
-    fetchSession()
   }, [id])
 
   const fetchProject = async () => {
     try {
       const response = await axios.get(`/projects/${id}`)
-      setProject(response.data.data)
-      if (response.data.data.description) {
-        setBusinessDescription(prev => prev || response.data.data.description)
+      const projectData = response.data.data
+      setProject(projectData)
+      
+      // Restore business description
+      if (projectData.description) {
+        setBusinessDescription(projectData.description)
+      }
+      
+      // Restore AI sessions and analysis
+      if (projectData.ai_sessions && projectData.ai_sessions.length > 0) {
+        const latestSession = projectData.ai_sessions[0]
+        setSessionId(latestSession.id)
+        
+        // Check if session is completed
+        if (latestSession.status === 'completed') {
+          // Extract analysis from the last message
+          const messages = latestSession.messages || []
+          const lastAssistantMessage = messages.filter(m => m.role === 'assistant').pop()
+          if (lastAssistantMessage) {
+            try {
+              const parsed = JSON.parse(lastAssistantMessage.content)
+              if (parsed.status === 'completed' && parsed.analysis) {
+                setAnalysis(parsed.analysis)
+              }
+            } catch (e) {
+              console.error('Failed to parse analysis:', e)
+            }
+          }
+        }
+      }
+      
+      // Restore reports
+      if (projectData.reports) {
+        setReports(projectData.reports)
+      }
+      
+      // Restore uploaded documents
+      if (projectData.uploaded_documents) {
+        setUploadedDocuments(projectData.uploaded_documents)
       }
     } catch (error) {
       console.error('Failed to fetch project:', error)

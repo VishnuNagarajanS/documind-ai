@@ -155,12 +155,57 @@ def get_project(project_id: str, current_user: User = Depends(get_current_user),
     ).first()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    
+    # Get AI sessions for this project
+    ai_sessions = db.query(AISession).filter(
+        AISession.project_id == project_id
+    ).order_by(AISession.created_at.desc()).all()
+    
+    # Get reports for this project
+    reports = db.query(Report).filter(
+        Report.project_id == project_id
+    ).order_by(Report.created_at.desc()).all()
+    
+    # Get uploaded documents for this project
+    uploaded_docs = db.query(UploadedDocument).filter(
+        UploadedDocument.project_id == project_id
+    ).order_by(UploadedDocument.uploaded_at.desc()).all()
+    
     return success_response(data={
         "id": str(project.id),
         "name": project.name,
         "industry": project.industry,
         "description": project.description,
-        "created_at": project.created_at.isoformat()
+        "created_at": project.created_at.isoformat(),
+        "ai_sessions": [
+            {
+                "id": str(session.id),
+                "messages": session.messages,
+                "status": session.status,
+                "created_at": session.created_at.isoformat()
+            }
+            for session in ai_sessions
+        ],
+        "reports": [
+            {
+                "id": str(report.id),
+                "report_type": report.report_type,
+                "content": report.content,
+                "created_at": report.created_at.isoformat()
+            }
+            for report in reports
+        ],
+        "uploaded_documents": [
+            {
+                "id": str(doc.id),
+                "filename": doc.filename,
+                "file_type": doc.file_type,
+                "file_size": doc.file_size,
+                "extracted_text": doc.extracted_text,
+                "uploaded_at": doc.uploaded_at.isoformat()
+            }
+            for doc in uploaded_docs
+        ]
     }, message="Project retrieved successfully")
 
 
