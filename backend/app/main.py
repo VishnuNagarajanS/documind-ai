@@ -1,11 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from typing import List
 import google.generativeai as genai
 import io
+import os
 
 from app.config import settings
 from app.database import get_db, engine, Base
@@ -33,11 +35,28 @@ app = FastAPI(title="DocuMind AI API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=["*"],  # Allow all origins for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount frontend static files
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "dist")
+if os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+    
+    @app.get("/")
+    async def serve_frontend():
+        return FileResponse(os.path.join(frontend_path, "index.html"))
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend_catchall(full_path: str):
+        # Serve index.html for all routes to support React Router
+        file_path = os.path.join(frontend_path, "index.html")
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+        raise HTTPException(status_code=404, detail="Not Found")
 
 # Configure Gemini AI
 genai.configure(api_key=settings.GEMINI_API_KEY)

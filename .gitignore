@@ -41,9 +41,10 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Vite
-dist/
-dist-ssr/
+# dist/
+# dist-ssr/
 *.local
+!frontend/dist
 
 # IDE
 .vscode/
