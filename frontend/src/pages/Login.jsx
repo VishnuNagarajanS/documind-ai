@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { LogIn, Brain } from 'lucide-react'
@@ -11,10 +11,13 @@ export default function Login() {
   const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
-  if (isAuthenticated) {
-    navigate('/dashboard')
-    return null
-  }
+  // Must use useEffect for navigation — calling navigate() during render
+  // is illegal in React 18 and causes a silent white screen in production
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard')
+    }
+  }, [isAuthenticated, navigate])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
