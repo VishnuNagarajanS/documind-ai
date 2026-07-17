@@ -891,10 +891,12 @@ if frontend_path:
         app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
     @app.get("/")
+    @app.head("/")
     async def serve_frontend():
         return FileResponse(os.path.join(frontend_path, "index.html"))
 
     @app.get("/{full_path:path}")
+    @app.head("/{full_path:path}")
     async def serve_frontend_catchall(full_path: str):
         # Never catch API routes — they should 404 properly
         if full_path.startswith("api/"):
