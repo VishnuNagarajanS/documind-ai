@@ -868,10 +868,27 @@ def chat_about_report(
 app.include_router(api_router)
 
 # Serve frontend static files — MUST be AFTER all API routes
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "dist")
-if os.path.exists(frontend_path):
+# Try multiple possible paths for frontend/dist
+possible_paths = [
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "dist"),
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist"),
+    os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"),
+    "/opt/render/project/src/frontend/dist",
+    "./frontend/dist"
+]
+
+frontend_path = None
+for path in possible_paths:
+    if os.path.exists(path):
+        frontend_path = path
+        print(f"Found frontend at: {frontend_path}")
+        break
+
+if frontend_path:
     # Serve the assets directory (JS/CSS/images)
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+    assets_path = os.path.join(frontend_path, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
     @app.get("/")
     async def serve_frontend():
@@ -887,6 +904,10 @@ if os.path.exists(frontend_path):
         if os.path.exists(index_file):
             return FileResponse(index_file)
         raise HTTPException(status_code=404, detail="Not Found")
+else:
+    print("WARNING: Frontend dist directory not found. Tried paths:")
+    for path in possible_paths:
+        print(f"  - {path}")
 
 
 if __name__ == "__main__":
