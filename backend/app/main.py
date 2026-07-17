@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +33,9 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="DocuMind AI API", version="1.0.0")
 
+# All API routes use /api prefix so they are never caught by the frontend catch-all
+api_router = APIRouter(prefix="/api")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins for production
@@ -40,23 +43,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount frontend static files
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "dist")
-if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-    
-    @app.get("/")
-    async def serve_frontend():
-        return FileResponse(os.path.join(frontend_path, "index.html"))
-    
-    @app.get("/{full_path:path}")
-    async def serve_frontend_catchall(full_path: str):
-        # Serve index.html for all routes to support React Router
-        file_path = os.path.join(frontend_path, "index.html")
-        if os.path.exists(file_path):
-            return FileResponse(file_path)
-        raise HTTPException(status_code=404, detail="Not Found")
 
 # Configure Gemini AI
 genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -86,7 +72,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 # Authentication Endpoints
-@app.post("/auth/register", status_code=status.HTTP_201_CREATED)
+@api_router.post("/auth/register", status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
@@ -111,7 +97,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     }, message="User registered successfully")
 
 
-@app.post("/auth/login")
+@api_router.post("/auth/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
     if not db_user or not verify_password(user.password, db_user.password_hash):
@@ -127,13 +113,13 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     }, message="Login successful")
 
 
-@app.post("/auth/logout")
+@api_router.post("/auth/logout")
 def logout(current_user: User = Depends(get_current_user)):
     return success_response(message="Logged out successfully")
 
 
 # Project Endpoints
-@app.get("/projects")
+@api_router.get("/projects")
 def get_projects(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     projects = db.query(Project).filter(Project.user_id == current_user.id).order_by(Project.created_at.desc()).all()
     projects_data = [{
@@ -146,7 +132,7 @@ def get_projects(current_user: User = Depends(get_current_user), db: Session = D
     return success_response(data={"projects": projects_data}, message="Projects retrieved successfully")
 
 
-@app.post("/projects", status_code=status.HTTP_201_CREATED)
+@api_router.post("/projects", status_code=status.HTTP_201_CREATED)
 def create_project(project: ProjectCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     db_project = Project(
         user_id=current_user.id,
@@ -166,7 +152,7 @@ def create_project(project: ProjectCreate, current_user: User = Depends(get_curr
     }, message="Project created successfully")
 
 
-@app.get("/projects/{project_id}")
+@api_router.get("/projects/{project_id}")
 def get_project(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     project = db.query(Project).filter(
         Project.id == project_id,
@@ -228,7 +214,7 @@ def get_project(project_id: str, current_user: User = Depends(get_current_user),
     }, message="Project retrieved successfully")
 
 
-@app.delete("/projects/{project_id}")
+@api_router.delete("/projects/{project_id}")
 def delete_project(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     project = db.query(Project).filter(
         Project.id == project_id,
@@ -242,7 +228,7 @@ def delete_project(project_id: str, current_user: User = Depends(get_current_use
     return success_response(message="Project deleted successfully")
 
 
-@app.get("/projects/{project_id}/session")
+@api_router.get("/projects/{project_id}/session")
 def get_project_session(
     project_id: str,
     current_user: User = Depends(get_current_user),
@@ -339,7 +325,7 @@ def extract_text_from_file(file: UploadFile) -> str:
 
 
 # Document Upload Endpoints
-@app.post("/projects/{project_id}/upload")
+@api_router.post("/projects/{project_id}/upload")
 def upload_document(
     project_id: str,
     file: UploadFile = File(...),
@@ -402,7 +388,7 @@ def upload_document(
         )
 
 
-@app.get("/projects/{project_id}/documents")
+@api_router.get("/projects/{project_id}/documents")
 def list_documents(
     project_id: str,
     current_user: User = Depends(get_current_user),
@@ -427,7 +413,7 @@ def list_documents(
     )
 
 
-@app.delete("/projects/{project_id}/documents/{document_id}")
+@api_router.delete("/projects/{project_id}/documents/{document_id}")
 def delete_document(
     project_id: str,
     document_id: str,
@@ -463,7 +449,7 @@ def delete_document(
 
 
 # AI Analysis Endpoints
-@app.post("/projects/{project_id}/analyze")
+@api_router.post("/projects/{project_id}/analyze")
 def start_analysis(
     project_id: str,
     business_description: str = Form(...),
@@ -534,7 +520,7 @@ def start_analysis(
         )
 
 
-@app.post("/projects/{project_id}/questions")
+@api_router.post("/projects/{project_id}/questions")
 def submit_answers(
     project_id: str,
     request: SubmitAnswersRequest,
@@ -701,7 +687,7 @@ def submit_answers(
 
 
 # Document Generation Endpoints
-@app.get("/projects/{project_id}/reports")
+@api_router.get("/projects/{project_id}/reports")
 def get_reports(project_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     project = db.query(Project).filter(
         Project.id == project_id,
@@ -720,7 +706,7 @@ def get_reports(project_id: str, current_user: User = Depends(get_current_user),
     return success_response(data={"reports": reports_data}, message="Reports retrieved successfully")
 
 
-@app.post("/projects/{project_id}/generate")
+@api_router.post("/projects/{project_id}/generate")
 def generate_documents(
     project_id: str,
     request: GenerateDocumentsRequest,
@@ -797,7 +783,7 @@ def generate_documents(
         )
 
 
-@app.get("/reports/{report_id}/download")
+@api_router.get("/reports/{report_id}/download")
 def download_report(report_id: str, format: str = "pdf", current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     report = db.query(Report).join(Project).filter(
         Report.id == report_id,
@@ -842,7 +828,7 @@ def download_report(report_id: str, format: str = "pdf", current_user: User = De
         )
 
 
-@app.post("/reports/{report_id}/chat")
+@api_router.post("/reports/{report_id}/chat")
 def chat_about_report(
     report_id: str,
     request: ChatRequest,
@@ -876,6 +862,31 @@ def chat_about_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="AI chat service unavailable. Please try again later."
         )
+
+
+# Include all API routes under /api prefix
+app.include_router(api_router)
+
+# Serve frontend static files — MUST be AFTER all API routes
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "dist")
+if os.path.exists(frontend_path):
+    # Serve the assets directory (JS/CSS/images)
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+
+    @app.get("/")
+    async def serve_frontend():
+        return FileResponse(os.path.join(frontend_path, "index.html"))
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend_catchall(full_path: str):
+        # Never catch API routes — they should 404 properly
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        # For all other paths (React Router routes), serve index.html
+        index_file = os.path.join(frontend_path, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Not Found")
 
 
 if __name__ == "__main__":
